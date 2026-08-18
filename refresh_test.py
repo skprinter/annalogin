@@ -1,49 +1,67 @@
 import os
 import requests
 
-REFRESH_URL = "https://adbackend.annadarpan.in/prdannadarpan.in/usermanagement/api/v3/auth/refresh-token"
-
-refresh_token = os.environ["ANNA_REFRESH_TOKEN"]
-client_id = os.getenv("ANNA_CLIENT_ID", "ad-fci")
-
-r = requests.post(
-    REFRESH_URL,
-    params={
-        "refreshToken": refresh_token,
-        "clientId": client_id,
-    },
-    headers={
-        "Accept": "application/json",
-        "Origin": "https://www.annadarpan.in",
-        "Referer": "https://www.annadarpan.in/",
-    },
-    timeout=30,
+REFRESH_URL = (
+    "https://adbackend.annadarpan.in/"
+    "prdannadarpan.in/usermanagement/api/v3/auth/refresh-token"
 )
 
-print("HTTP status:", r.status_code)
+CLIENT_ID = os.getenv("ANNA_CLIENT_ID", "ad-fci")
 
-try:
+
+def refresh(token):
+    r = requests.post(
+        REFRESH_URL,
+        params={
+            "refreshToken": token,
+            "clientId": CLIENT_ID,
+        },
+        headers={
+            "Accept": "application/json",
+            "Origin": "https://www.annadarpan.in",
+            "Referer": "https://www.annadarpan.in/",
+        },
+        timeout=30,
+    )
+
+    print("HTTP status:", r.status_code)
+
+    if not r.ok:
+        print("Refresh failed:", r.text[:500])
+        return None
+
     data = r.json()
 
-    if isinstance(data, dict):
-        print("Fields returned:", list(data.keys()))
+    print("Fields:", list(data.keys()))
+    print("Access token:", "PRESENT" if data.get("access_token") else "MISSING")
+    print("Refresh token:", "PRESENT" if data.get("refresh_token") else "MISSING")
+    print("expires_in:", data.get("expires_in"))
+    print("refresh_expires_in:", data.get("refresh_expires_in"))
 
-        for key in ("access_token", "refresh_token"):
-            if key in data:
-                value = data[key]
-                print(
-                    f"{key}: PRESENT "
-                    f"(length={len(value) if isinstance(value, str) else 'unknown'})"
-                )
+    return data
 
-        for key in ("expires_in", "refresh_expires_in", "token_type", "scope"):
-            if key in data:
-                print(f"{key}: {data[key]}")
 
-    else:
-        print("Response:", data)
+# Token A
+token_a = os.environ["ANNA_REFRESH_TOKEN"]
 
-except ValueError:
-    print("Non-JSON response:", r.text[:500])
+print("========== REFRESH #1 ==========")
+result_1 = refresh(token_a)
 
-r.raise_for_status()
+if not result_1 or not result_1.get("refresh_token"):
+    raise SystemExit("No new refresh token returned.")
+
+# Token B
+token_b = result_1["refresh_token"]
+
+print("\n========== REFRESH #2 ==========")
+result_2 = refresh(token_b)
+
+if not result_2:
+    raise SystemExit("Second refresh failed.")
+
+print("\n========== RESULT ==========")
+print("Token A -> Token B: SUCCESS")
+print(
+    "Token B -> Token C:",
+    "SUCCESS" if result_2.get("refresh_token") else "NO NEW TOKEN"
+)
