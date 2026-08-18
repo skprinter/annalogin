@@ -1,21 +1,25 @@
-name: Anna Darpan Refresh Save Test
+name: Anna Darpan Refresh Token
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  actions: write
-
 jobs:
-  refresh-and-save:
+  refresh-token:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+
+    env:
+      REFRESH_URL: >-
+        https://adbackend.annadarpan.in/prdannadarpan.in/usermanagement/api/v3/auth/refresh-token
+      CLIENT_ID: ad-fci
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -26,19 +30,83 @@ jobs:
           pip install requests
 
       - name: Refresh Anna Darpan token
+        id: refresh
         env:
-          ANNA_REFRESH_TOKEN: ${{ secrets.ANNA_REFRESH_TOKEN }}
-          ANNA_CLIENT_ID: ad-fci
+          OLD_REFRESH_TOKEN: ${{ secrets.ANNA_REFRESH_TOKEN }}
         run: |
-          python refresh_and_save.py
+          python - <<'PY'
+          import os
+          import sys
+          import requests
 
-      - name: Update GitHub refresh-token secret
+          url = os.environ["REFRESH_URL"]
+          refresh_token = os.environ["OLD_REFRESH_TOKEN"]
+          client_id = os.environ["CLIENT_ID"]
+
+          if not refresh_token:
+              print("ERROR: ANNA_REFRESH_TOKEN is empty")
+              sys.exit(1)
+
+          response = requests.post(
+              url,
+              params={
+                  "refreshToken": refresh_token,
+                  "clientId": client_id
+              },
+              headers={
+                  "Accept": "application/json"
+              },
+              timeout=30
+          )
+
+          print("Refresh HTTP status:", response.status_code)
+
+          if not response.ok:
+              print("Refresh failed.")
+              print("Response:", response.text[:500])
+              sys.exit(1)
+
+          data = response.json()
+
+          access_token = data.get("access_token")
+          new_refresh_token = data.get("refresh_token")
+
+          if not access_token:
+              print("ERROR: access_token missing")
+              sys.exit(1)
+
+          if not new_refresh_token:
+              print("ERROR: refresh_token missing")
+              sys.exit(1)
+
+          # Do NOT print either token.
+          print("Access token: PRESENT")
+          print("Refresh token: PRESENT")
+          print("expires_in:", data.get("expires_in"))
+          print("refresh_expires_in:", data.get("refresh_expires_in"))
+
+          # Pass the new token to the next step through GITHUB_OUTPUT.
+          # GitHub masks the value once registered as a secret.
+          print(f"::add-mask::{new_refresh_token}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("new_refresh_token<<EOF\n")
+              f.write(new_refresh_token)
+              f.write("\nEOF\n")
+          PY
+
+      - name: Update ANNA_REFRESH_TOKEN secret
         env:
-          GH_TOKEN: ${{ github.token }}
-          NEW_REFRESH_TOKEN: ${{ env.ANNA_REFRESH_TOKEN_NEW }}
+          GH_TOKEN: ${{ secrets.REPO_PAT }}
+          NEW_REFRESH_TOKEN: ${{ steps.refresh.outputs.new_refresh_token }}
         run: |
-          printf '%s' "$NEW_REFRESH_TOKEN" | gh secret set ANNA_REFRESH_TOKEN
+          if [ -z "$NEW_REFRESH_TOKEN" ]; then
+            echo "ERROR: New refresh token is empty"
+            exit 1
+          fi
 
-      - name: Verify
-        run: |
-          echo "Refresh token rotation and secret update completed successfully."
+          printf '%s' "$NEW_REFRESH_TOKEN" | \
+            gh secret set ANNA_REFRESH_TOKEN \
+              --repo "${{ github.repository }}"
+
+          echo "ANNA_REFRESH_TOKEN updated successfully."
