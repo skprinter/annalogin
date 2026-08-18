@@ -1,20 +1,6 @@
-name: Annadarpan login
-on:
-  workflow_dispatch:
-jobs:
-  login:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: "3.12"}
-      - run: pip install -r requirements.txt
-      - name: Login
-        env:
-          ANNADARPAN_USERNAME: ${{ secrets.ANNADARPAN_USERNAME }}
-          ANNADARPAN_PASSWORD: ${{ secrets.ANNADARPAN_PASSWORD }}
-          ANNADARPAN_PUBLIC_KEY_B64: ${{ secrets.ANNADARPAN_PUBLIC_KEY_B64 }}
-          ANNADARPAN_CAPTCHA_TOKEN: ${{ secrets.ANNADARPAN_CAPTCHA_TOKEN }}
-          CLIENT_ID: ad-fci
-        run: python login.py
+- name: Test Refresh Token
+  env:
+    ANNA_REFRESH_TOKEN: ${{ secrets.ANNA_REFRESH_TOKEN }}
+    ANNA_CLIENT_ID: ad-fci
+  run: |
+    python refresh_test.py
