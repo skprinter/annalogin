@@ -62,6 +62,15 @@ jobs:
         run: |
           python update_github_secrets.py
 
+      - name: Update GitHub token secrets
+        env:
+          GH_SECRETS_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
+          ANNA_ACCESS_TOKEN: ${{ env.ANNA_ACCESS_TOKEN }}
+          ANNA_REFRESH_TOKEN_NEW: ${{ env.ANNA_REFRESH_TOKEN_NEW }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python update_github_secrets.py
+
       # --------------------------------------------------
       # 6. Verify workflow completed
       # --------------------------------------------------
